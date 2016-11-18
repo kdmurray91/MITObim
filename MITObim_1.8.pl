@@ -438,6 +438,7 @@ foreach (@iteration){
 			print strftime("%b %e %H:%M:%S", localtime) . "\n\n";
 			if ($symlink_final) {
 				print "\nSymlinking final iteration directory to ./final_iteration\n";
+				cd "..";
 				symlink("iteration$currentiteration", "final_iteration");
 			}
 			exit;
