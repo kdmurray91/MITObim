@@ -19,7 +19,9 @@ my $startiteration = 1;
 my $enditeration = 1;
 
 my ($quick, $noshow, $help, $strainname, $paired, $mode, $refname, $readpool, $maf, $proofreading, $readlength, $insertsize, $MM, $trim, $trimoverhang, $k_bait, $clean, $clean_interval, $min_contig_cov) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 31, 0, 2, 0);
-my ($miramode, $key, $val, $exit, $current_contiglength, $current_number_of_reads, $current_number_of_contigs);
+my ($miramode, $miraargs, $key, $val, $exit, $current_contiglength, $current_number_of_reads, $current_number_of_contigs);
+my $threads = 1;
+my $symlink_final=0;
 my $splitting = 0;
 my $platform = "solexa";
 my $platform_settings;# = "SOLEXA";
@@ -61,6 +63,8 @@ my $USAGE = 	"\nusage: ./MITObim.pl <parameters>
 		--mirapath <string>     full path to MIRA binaries (only needed if MIRA is not in PATH)
 		--redirect_tmp		redirect temporary output to this location (useful in case you are running MITObim on an NFS mount)
 		--NFS_warn_only		allow MIRA to run on NFS mount without aborting -  warn only (expert option - see MIRA documentation 'check_nfs')
+		--threads <int>		number of CPU cores Mira should utilise
+		--symlink-final		Symlink final iteration directory to ./final_iteration (helps if one uses Make/Snakemake)
 		\nexamples:
 		./MITObim.pl -start 1 -end 5 -sample StrainX -ref reference-mt -readpool illumina_readpool.fastq -maf initial_assembly.maf
 		./MITObim.pl -end 10 --quick reference.fasta -sample StrainY -ref reference-mt -readpool illumina_readpool.fastq\n\n";
@@ -97,7 +101,9 @@ GetOptions (	"start=i" => \$startiteration,
 		"split!"	=>	\$splitting,
 		"min_cov=i"	=>	\$min_contig_cov,
 		"redirect_tmp=s" =>	\$redirect_temp,
-		"NFS_warn_only!" => \$NFS_warn_only) or die "Incorrect usage!\n$USAGE";
+		"NFS_warn_only!" => \$NFS_warn_only,
+		"symlink-final!" => \$symlink_final,
+		"threads=i" =>	\$threads) or die "Incorrect usage!\n$USAGE";
 
 
 print $PROGRAM; 
@@ -133,6 +139,10 @@ if ($quick){
 	print "\nquick option selected! -maf option will be ignored (if given)\n";
 	$maf = 0;
 	$startiteration = 0;
+}
+
+if ($threads > 1) {
+	$miraargs="$miraargs --threads $threads"
 }
 print $USAGE and exit if ($startiteration > $enditeration);
 unless (((-e $maf)||($quick)) && (-e $readpool)){
@@ -349,7 +359,7 @@ foreach (@iteration){
 	MIRA:
 	print "\nrunning $miramode assembly using MIRA\n\n";
 	&create_manifest($currentiteration,$strainname,$refname,$miramode,$trim_off,$platform_settings,$shme,$paired,$trimoverhang,"$strainname-readpool-it$currentiteration.fastq","backbone_it$currentiteration\_initial_$refname.fna", $redirect_temp, $NFS_warn_only);
-	@output = qx($mira manifest.conf ); 
+	@output = qx($mira $miraargs manifest.conf ); 
 
 	$exit = $? >> 8;
 	unless (!$noshow){
@@ -426,6 +436,10 @@ foreach (@iteration){
 		if ($number_of_reads[-2] >= $number_of_reads[-1]){
 			print "\nMITObim has reached a stationary read number after $currentiteration iterations!!\n$cite";
 			print strftime("%b %e %H:%M:%S", localtime) . "\n\n";
+			if ($symlink_final) {
+				print "\nSymlinking final iteration directory to ./final_iteration\n";
+				symlink("iteration$currentiteration", "final_iteration");
+			}
 			exit;
 		}
 	}
